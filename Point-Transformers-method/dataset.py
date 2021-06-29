@@ -190,7 +190,7 @@ class EyeSegDataset(Dataset):
         # print(self.classes)
         # print(self.datapath)
         # Mapping from category ('Chair') to a list of int [10,11,12,13] as segmentation labels
-        self.seg_classes = {'Pupil' :[0], 'Iris': [1], 'Sclera': [2], 'Eye-lashes': [3], 'Background':[4]}
+        self.seg_classes = {'Pupil' : [0], 'Iris': [1], 'Sclera': [2], 'Eye-lashes': [3], 'Background': [4]}
 
         # for cat in sorted(self.seg_classes.keys()):
         #     print(cat, self.seg_classes[cat])
