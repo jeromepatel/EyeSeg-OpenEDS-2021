@@ -196,12 +196,12 @@ class EyeSegDataset(Dataset):
         #     print(cat, self.seg_classes[cat])
 
         self.cache = {}  # from index to (point_set, cls, seg) tuple
-        self.cache_size = 20
+        self.cache_size = 1
 
 
     def __getitem__(self, index):
         if index in self.cache:
-            point_set, seg = self.cache[index]
+            point_set, fn, seg = self.cache[index]
         else:
             fn = self.datapath[index]
             data = self.load_point_cloud(fn)
@@ -210,10 +210,11 @@ class EyeSegDataset(Dataset):
             seg = np.load(labels_path).astype(np.int32) 
             # seg = data[:, -1].astype(np.int32)
             if len(self.cache) < self.cache_size:
-                self.cache[index] = (point_set, seg)
+                self.cache[index] = (point_set,fn, seg)
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
 
-        # if self.split == 'train':
+        if self.split == 'test':
+            return point_set,fn,seg
         choice = np.random.choice(len(seg), self.npoints, replace=False)
         # resample
         point_set = point_set[choice, :]
@@ -225,7 +226,7 @@ class EyeSegDataset(Dataset):
         #     point_set = point_set[choice, :]
         #     seg = seg[choice]
 
-        return point_set, seg
+        return point_set,fn, seg
 
     def load_point_cloud(self,filepath):
         pointCloudPath = osp.join(self.data_dir,filepath,"pointcloud.ply")

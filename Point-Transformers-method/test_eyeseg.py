@@ -47,9 +47,9 @@ def main(args):
 
     root = hydra.utils.to_absolute_path('data/')
 
-    TRAIN_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='train', normal_channel=args.normal)
-    trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=4, drop_last=True)
-    TEST_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='val', normal_channel=args.normal)
+    # TRAIN_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='train', normal_channel=args.normal)
+    # trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=4, drop_last=True)
+    TEST_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='test', normal_channel=args.normal)
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=4)
 
     '''MODEL LOADING'''
@@ -116,18 +116,20 @@ def main(args):
 
             classifier = classifier.eval()
 
-            for batch_id, (points, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
+            for batch_id, (points,filepath, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
                 cur_batch_size, NUM_POINT, _ = points.size()
                 points,  target = points.float().cuda(), target.long().cuda()
                 seg_pred = classifier(points)
-                if batch_id == 0:
-                    test_dict = {'points':points,'target':target,'seg_pred':seg_pred}
-                    torch.save(test_dict,"first_batch.pth")
+                #save predictions
+                filepath = filepath[0]
+                os.makedirs(f"{filepath}/",exist_ok = True)
+                test_dict = {'points':points,'target':target,'seg_pred':seg_pred}
+                torch.save(test_dict,f"{filepath}/first_batch.pth")
                 cur_pred_val = seg_pred.cpu().data.numpy()
                 cur_pred_val_logits = cur_pred_val
                 cur_pred_val = np.zeros((cur_batch_size, NUM_POINT)).astype(np.int32)
                 target = target.cpu().data.numpy()
-                print(target.shape, "adsdgs")
+                # print(target.shape, "adsdgs")
                 for i in range(cur_batch_size):
                     cat = seg_label_to_cat[target[i, 0]]
                     logits = cur_pred_val_logits[i, :, :]
