@@ -213,8 +213,8 @@ class EyeSegDataset(Dataset):
                 self.cache[index] = (point_set,fn, seg)
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
 
-        if self.split == 'test':
-            return point_set,fn,seg
+        # if self.split == 'test':
+        #     return point_set,fn,seg
         choice = np.random.choice(len(seg), self.npoints, replace=False)
         # resample
         point_set = point_set[choice, :]

@@ -35,14 +35,18 @@ class eyeSegmentation(Dataset):
         
         for file in os.listdir(self.filepath):   
             if os.path.isdir(osp.join(self.filepath,file)):
-                labels_path = osp.join(self.filepath, file, "labels.npy")
-                label = np.load(labels_path)
-                #print(label.shape[0])
-                if label.shape[0] == 9290 :
-                    print(file,label.shape[0])
-                elif label.shape[0] == 67931:
-                    print(file,label.shape[0])
-                finalSizes.append(label.shape[0])
+                # labels_path = osp.join(self.filepath, file, "labels.npy")
+                # label = np.load(labels_path)
+                # #print(label.shape[0])
+                # if label.shape[0] == 9290 :
+                #     print(file,label.shape[0])
+                # elif label.shape[0] == 67931:
+                #     print(file,label.shape[0])
+                pointCloudPath = osp.join(self.filepath,file,"pointcloud.ply")
+        
+                plydata = PlyData.read(pointCloudPath)
+                pts = np.array(np.transpose(np.stack((plydata['vertex']['x'],plydata['vertex']['y'],plydata['vertex']['z'])))).astype(np.float32)
+                finalSizes.append(pts.shape[0])
                 self.listalldir.append(file)
                 metaData = file.split("_")
                 self.sweeps.append((metaData[0],metaData[2]))
@@ -71,15 +75,16 @@ class eyeSegmentation(Dataset):
         dist = np.max(np.sqrt(np.sum(point_set ** 2, axis=1)), 0)
         point_set = point_set / dist  # scale
         
-        labels_path = osp.join(self.filepath, seqDir, "labels.npy")
-        label = np.load(labels_path)
+        # labels_path = osp.join(self.filepath, seqDir, "labels.npy")
+        # label = np.load(labels_path)
         
+        label = np.zeros((120,))
         # features = np.ones([pts.shape[0], 1])
         
         # if self.split == 'test':
         #     label = np.zeros(pts.shape)
         
-        label = label[choice]
+        # label = label[choice]
         
         return pts, label
                
@@ -87,12 +92,24 @@ class eyeSegmentation(Dataset):
 # # for sweep in seq_path.iterdir():
 # #     print(seq_str, sweep.stem)
 
-eyeSeg = eyeSegmentation("D:/OpenEDS 2021/","train")
-# DataLoader = torch.utils.data.DataLoader(eyeSeg, batch_size=1, shuffle=True)
-# for point,label in DataLoader:
-#     print(point.shape)
+eyeSeg = eyeSegmentation("D:/OpenEDS 2021/","val")
+DataLoader = torch.utils.data.DataLoader(eyeSeg, batch_size=1, shuffle=True)
+for point,label in DataLoader:
+    print(point.shape)
+
+## To print the visualization results of Pointcloud sizes
 
 finalSizes.sort()
 print(finalSizes[:10],finalSizes[-10:])
-with open("NumPoints.txt","w") as f:
-    f.write("\n".join(map(str,finalSizes)))
+# with open("NumPoints.txt","w") as f:
+#     f.write("\n".join(map(str,finalSizes)))
+    
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# import numpy as np
+
+# with open("NumPoints.txt","r") as f:
+#     str_data = list(map(int,f.read().split("\n")))
+#     print(str_data)
+#     str_data.pop()
+# sns.distplot(str_data)

@@ -29,7 +29,7 @@ class TransformerBlock(nn.Module):
         dists = square_distance(xyz, xyz)
         knn_idx = dists.argsort()[:, :, :self.k]  # b x n x k
         knn_xyz = index_points(xyz, knn_idx)
-        
+        torch.cuda.empty_cache()
         pre = features
         x = self.fc1(features)
         q, k, v = self.w_qs(x), index_points(self.w_ks(x), knn_idx), index_points(self.w_vs(x), knn_idx)
