@@ -8,13 +8,15 @@ import importlib
 import shutil
 import provider
 import numpy as np
-
+import os.path as osp
 from pathlib import Path
 from tqdm import tqdm
 from dataset import EyeSegDataset
 import hydra
 import omegaconf
-
+from plyfile import PlyData
+import open3d as o3d
+from pointnet_util import pc_normalize
 
 seg_classes = {'Pupil' :[0], 'Iris': [1], 'Sclera': [2], 'Eye-lashes' :[3], 'Background':[4]}
 seg_label_to_cat = {}
@@ -35,6 +37,27 @@ def to_categorical(y, num_classes):
         return new_y.cuda()
     return new_y
 
+def read_densePoints(root,testDir, filepath):
+    pointCloudPath = osp.join(root,testDir,filepath,"pointcloud.ply")
+    plydata = PlyData.read(pointCloudPath)
+    return np.array(np.transpose(np.stack((plydata['vertex']['x'],plydata['vertex']['y'],plydata['vertex']['z'])))).astype(np.float32)
+
+def interpolate_dense_labels(sparse_points, sparse_labels, dense_points, k=3):
+    #calculate the dense point cloud labels from sparse points and corrresponding sparse labels
+    sparse_pcd = o3d.geometry.PointCloud()
+    sparse_pcd.points = o3d.utility.Vector3dVector(sparse_points)
+    sparse_pcd_tree = o3d.geometry.KDTreeFlann(sparse_pcd)
+            
+    dense_labels = []
+    for dense_point in dense_points:
+        _, sparse_indexes, _ = sparse_pcd_tree.search_knn_vector_3d(
+            dense_point, k
+        )
+        knn_sparse_labels = sparse_labels[sparse_indexes]
+        dense_label = np.bincount(knn_sparse_labels).argmax()
+        dense_labels.append(dense_label)
+    return np.asarray(dense_labels, dtype='uint8')
+
 @hydra.main(config_path='config', config_name='eyeseg')
 def main(args):
     omegaconf.OmegaConf.set_struct(args, False)
@@ -46,6 +69,7 @@ def main(args):
     # print(args.pretty())
 
     root = hydra.utils.to_absolute_path('data/')
+    args.batch_size = 1
 
     # TRAIN_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='train', normal_channel=args.normal)
     # trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=4, drop_last=True)
@@ -67,7 +91,7 @@ def main(args):
         checkpoint = torch.load('best_model.pth')
         start_epoch = checkpoint['epoch']
         classifier.load_state_dict(checkpoint['model_state_dict'])
-        logger.info('Use pretrain model')
+        logger.info('Using pretrain model..........')
     except:
         logger.info('No existing model, please check your model.')
         start_epoch = 0
@@ -115,89 +139,59 @@ def main(args):
                     seg_label_to_cat[label] = cat
 
             classifier = classifier.eval()
-
+            filenames = []
+            
             for batch_id, (points,filepath, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
+                filepath = filepath[0]
                 cur_batch_size, NUM_POINT, _ = points.size()
                 points,  target = points.float().cuda(), target.long().cuda()
                 seg_pred = classifier(points)
-                #save predictions
-                filepath = filepath[0]
-                os.makedirs(f"{filepath}/",exist_ok = True)
-                test_dict = {'points':points,'target':target,'seg_pred':seg_pred}
-                torch.save(test_dict,f"{filepath}/first_batch.pth")
-                cur_pred_val = seg_pred.cpu().data.numpy()
-                cur_pred_val_logits = cur_pred_val
-                cur_pred_val = np.zeros((cur_batch_size, NUM_POINT)).astype(np.int32)
-                target = target.cpu().data.numpy()
-                # print(target.shape, "adsdgs")
-                for i in range(cur_batch_size):
-                    cat = seg_label_to_cat[target[i, 0]]
-                    logits = cur_pred_val_logits[i, :, :]
-                    cur_pred_val[i, :] = np.argmax(logits[:, seg_classes[cat]], 1) + seg_classes[cat][0]
+                sparse_labels = torch.argmax(seg_pred[0], dim=1).cpu().data.numpy()
+                assert sparse_labels.shape[0] != 1 
+                #run interpolation
+                
+                #convert to full size labels from sparse points, dense points, and sparse labels
+                
+                #read dense points
+                dense_points = read_densePoints(root,'test',filepath)
+                dense_points = pc_normalize(dense_points)
+                sparse_points = points.cpu().data.numpy()
+                sparse_points = sparse_points.reshape(sparse_points.shape[1],3)
+                
+                # print(sparse_labels.shape, sparse_points.shape, dense_points.shape)
+                dense_labels = interpolate_dense_labels(sparse_points, sparse_labels, dense_points)
+                os.makedirs("output/",exist_ok=True)
+                np.save(f"output/{filepath}.npy",dense_labels)
+                filenames.append(f"Point-Transformers-method/log/eyeseg/Hengshuang/output/{filepath}.npy")
+                # print(dense_labels.shape)
+                
+                #save interpolated predictions
+                
+                # os.makedirs(f"{filepath}/",exist_ok = True)
+                # test_dict = {'points':points,'target':target,'seg_pred':seg_pred}
+                # torch.save(test_dict,f"{filepath}/first_batch.pth")
+                # cur_pred_val_logits = sparse_labels
+                # cur_pred_val = np.zeros((cur_batch_size, NUM_POINT)).astype(np.int32)
+                # target = target.cpu().data.numpy()
+                # # print(target.shape, "adsdgs")
+                # for i in range(cur_batch_size):
+                #     cat = seg_label_to_cat[target[i, 0]]
+                #     logits = cur_pred_val_logits[i, :, :]
+                #     cur_pred_val[i, :] = np.argmax(logits[:, seg_classes[cat]], 1) + seg_classes[cat][0]
 
-                correct = np.sum(cur_pred_val == target)
-                total_correct += correct
-                total_seen += (cur_batch_size * NUM_POINT)
+                # correct = np.sum(cur_pred_val == target)
+                # total_correct += correct
+                # total_seen += (cur_batch_size * NUM_POINT)
 
-                for l in range(num_part):
-                    total_seen_class[l] += np.sum(target == l)
-                    total_correct_class[l] += (np.sum((cur_pred_val == l) & (target == l)))
+            with open("submissionFiles.txt","w") as f:
+                f.write("\n".join(filenames))
+            
+        #     test_metrics['accuracy'] = total_correct / float(total_seen)
+    
 
-                for i in range(cur_batch_size):
-                    segp = cur_pred_val[i, :]
-                    segl = target[i, :]
-                    cat = seg_label_to_cat[segl[0]]
-                    part_ious = [0.0 for _ in range(len(seg_classes[cat]))]
-                    for l in seg_classes[cat]:
-                        if (np.sum(segl == l) == 0) and (
-                                np.sum(segp == l) == 0):  # part is not present, no prediction as well
-                            part_ious[l - seg_classes[cat][0]] = 1.0
-                        else:
-                            part_ious[l - seg_classes[cat][0]] = np.sum((segl == l) & (segp == l)) / float(
-                                np.sum((segl == l) | (segp == l)))
-                    shape_ious[cat].append(np.mean(part_ious))
-
-            all_shape_ious = []
-            for cat in shape_ious.keys():
-                for iou in shape_ious[cat]:
-                    all_shape_ious.append(iou)
-                shape_ious[cat] = np.mean(shape_ious[cat])
-            mean_shape_ious = np.mean(list(shape_ious.values()))
-            test_metrics['accuracy'] = total_correct / float(total_seen)
-            test_metrics['class_avg_accuracy'] = np.mean(
-                np.array(total_correct_class) / np.array(total_seen_class, dtype=np.float))
-            for cat in sorted(shape_ious.keys()):
-                logger.info('eval mIoU of %s %f' % (cat + ' ' * (14 - len(cat)), shape_ious[cat]))
-            test_metrics['class_avg_iou'] = mean_shape_ious
-            test_metrics['inctance_avg_iou'] = np.mean(all_shape_ious)
-
-        logger.info('Epoch %d test Accuracy: %f  Class avg mIOU: %f   Inctance avg mIOU: %f' % (
-            epoch + 1, test_metrics['accuracy'], test_metrics['class_avg_iou'], test_metrics['inctance_avg_iou']))
-        if (test_metrics['inctance_avg_iou'] >= best_inctance_avg_iou):
-            logger.info('Save model...')
-            savepath = 'best_model.pth'
-            logger.info('Saving at %s' % savepath)
-            state = {
-                'epoch': epoch,
-                'train_acc': train_instance_acc,
-                'test_acc': test_metrics['accuracy'],
-                'class_avg_iou': test_metrics['class_avg_iou'],
-                'inctance_avg_iou': test_metrics['inctance_avg_iou'],
-                'model_state_dict': classifier.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-            }
-            torch.save(state, savepath)
-            logger.info('Saving model....')
-
-        if test_metrics['accuracy'] > best_acc:
-            best_acc = test_metrics['accuracy']
-        if test_metrics['class_avg_iou'] > best_class_avg_iou:
-            best_class_avg_iou = test_metrics['class_avg_iou']
-        if test_metrics['inctance_avg_iou'] > best_inctance_avg_iou:
-            best_inctance_avg_iou = test_metrics['inctance_avg_iou']
-        logger.info('Best accuracy is: %.5f' % best_acc)
-        logger.info('Best class avg mIOU is: %.5f' % best_class_avg_iou)
-        logger.info('Best inctance avg mIOU is: %.5f' % best_inctance_avg_iou)
+        # logger.info('Epoch %d test Accuracy: %f' % (
+        #     epoch + 1, test_metrics['accuracy'])
+        # )
         global_epoch += 1
 
 

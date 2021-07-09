@@ -12,6 +12,8 @@ import open3d as o3d
 import numpy as np
 import torch
 import os
+from collections import Counter
+import statistics as stat
 # os.chdir('C:/')
 # print(os.listdir())
 filepath = "C:/Users/jyotm/Documents/OpenEDS 2021 3d point cloud segmentation/Point-Transformers-method/log/eyeseg/Hengshuang"
@@ -25,7 +27,7 @@ else:
 #remove redundant files 
 files = [f for f in files if "_pose_" in f]
 #sample point cloud to visualize
-sample_batch = 7
+sample_batch = 8
 interpolated_preds = True
 samplepath = filepath + f"/{files[sample_batch]}"
 
@@ -36,7 +38,11 @@ def compute_mean_iou(flat_pred, flat_label):
     :param flat_label: flattened label matrix
     :return: mean IOU
     '''
-    unique_labels = np.unique(flat_label)
+    val =  stat.mode(list(flat_pred))
+    print("the mode of all classes is: ", val)
+    print(Counter(list(flat_pred)))
+    
+    unique_labels = np.unique(flat_pred)
     num_unique_labels = len(unique_labels)
 
     # print(num_unique_labels, "num unique values")
@@ -52,9 +58,10 @@ def compute_mean_iou(flat_pred, flat_label):
         # print(np.logical_and(label_i, pred_i))
         Intersect[index] = float(np.sum(np.logical_and(label_i, pred_i)))
         Union[index] = float(np.sum(np.logical_or(label_i, pred_i)) )
-
+        
+    print(Intersect)
     # print(Intersect,Union)
-    mean_iou = np.mean(Intersect / Union)
+    mean_iou = np.mean(Intersect[:] / Union[:])
     return mean_iou
 
 Show_target =  "both"       # 0, 1, "both" (for computing iou)
@@ -70,18 +77,64 @@ print(a.keys())
 def to_categorical(y, num_classes):
     """ 1-hot encodes a tensor """
     new_y = torch.eye(num_classes)[y.cpu().data.numpy(),]
+    print("the shape is ",new_y)
     if (y.is_cuda):
         return new_y.cuda()
     return new_y
 
 
 #visualize the onehot label point cloud or target label point cloud 
-def visualize(pcd,labels,onehot = True):
-    pass
+def visualize(pcd,labels,Isonehot = True):
+    sparse_pcd = o3d.geometry.PointCloud()
+    sparse_pcd.points = o3d.utility.Vector3dVector(pcd)
+    
+    #keep onehot if its in ONEHOT else convert categorical to onehot
+    if not Isonehot:
+        #convert categorical into oneHot
+        categorical = to_categorical(torch.Tensor(labels), 5).data.numpy()
+    else:
+        categorical = labels
+    
+    '''
+    columns are classes, rows are points, we assign each class to a rgb mix (or row) channel
+        0 1 0 0 0   => r
+        1 0 0 0 0   => g
+        0 0 1 0 0   => b
+        0 0 0 0 1   => r & g
+        0 0 0 1 0   => g & b
+        
+        final r,g,b 
+        r = 0 1 0 0 1
+        g = 1 0 0 1 1
+        b = 0 0 1 1 0
+        
+    '''
+    # red = categorical[:,0]  + categorical[:,3]  + categorical[:,4]
+    # green = categorical[:,1] + categorical[:,3] 
+    # blue = categorical[:,2] + categorical[:,4] + categorical[:,4]
+    
+    #above colours are not good looking but the concept is same for below colours
+    red = ( categorical[:,0] * 2  + categorical[:,2]  * 3 ) / 5
+    green = (categorical[:,1] * 2 + categorical[:,3] ) / 3
+    blue = (categorical[:,3] + categorical[:,4] * 2  ) / 3
+
+    colours = np.vstack([red,green,blue]).transpose()
+    sparse_pcd.colors = o3d.utility.Vector3dVector(colours)
+    o3d.visualization.draw_geometries([sparse_pcd],left=-50)
+    
+    
+    
+def pc_normalize(pc):
+    centroid = np.mean(pc, axis=0)
+    pc = pc - centroid
+    m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
+    pc = pc / m
+    return pc
 
 xyz = np.array(a['points'].cpu())
 print(xyz.shape, "is the shape of points")
 xyz = xyz[0]
+# xyz = pc_normalize(xyz)
 
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(xyz)
@@ -146,6 +199,7 @@ if Show_target != "both":
     green = (onehot_encoded[:,1] + onehot_encoded[:,3] * 3) / 4
     blue = (onehot_encoded[:,3] + onehot_encoded[:,4] ) / 2
 
+# I was too lazy to use visualize function at this point, coz I first wrote this, so use that function instead of below code
 # pcd.points = o3d.utility.Vector3dVector(point_set)
 if Show_target != "both":
     colours = np.vstack([red,green,blue]).transpose()
@@ -159,7 +213,7 @@ def interpolate_dense_labels(sparse_points, sparse_labels, dense_points, k=3):
     sparse_pcd = o3d.geometry.PointCloud()
     sparse_pcd.points = o3d.utility.Vector3dVector(sparse_points)
     sparse_pcd_tree = o3d.geometry.KDTreeFlann(sparse_pcd)
-
+            
     dense_labels = []
     for dense_point in dense_points:
         _, sparse_indexes, _ = sparse_pcd_tree.search_knn_vector_3d(
@@ -179,15 +233,25 @@ if interpolated_preds:
     pcd_orig = o3d.io.read_point_cloud(orig_pc_filepath)
     pcd_orig_points =  np.asarray(pcd_orig.points)
     print(f"shape of original pcd is {pcd_orig_points.shape}")
+    pcd_orig_points = pc_normalize(pcd_orig_points)
     
+    for pt in xyz:
+        if pt in pcd_orig_points:
+            print("the poinnt is present ",pt)
+    
+    print("agsdag",np.mean(xyz, axis=0), np.mean(pcd_orig_points,axis = 0))
     #read original target label file
     orig_target = orig_data_fp + f"/{files[sample_batch]}/labels.npy"
     labels = np.load(orig_target)
     print(f"the full dense target shape is : {labels.shape}")
     
+    
+    print("the counter is ",Counter(labels) )
     #calculate interpolation of dense pcd from sparse labels 
-    interpolated_preds = interpolate_dense_labels(xyz, train_preds, pcd_orig_points,k = 5)
+    interpolated_preds = interpolate_dense_labels(xyz, train_preds, pcd_orig_points,k = 15)
     print(f"interpolation complete, the shape is {interpolated_preds.shape}")
     print(f"the MIOU is:\n", compute_mean_iou(interpolated_preds, labels))
     
+    visualize(pcd_orig_points,labels,Isonehot=False)
+    # visualize(pcd_orig_points,interpolated_preds,Isonehot=False)
     

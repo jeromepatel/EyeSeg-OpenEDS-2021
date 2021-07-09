@@ -172,7 +172,7 @@ class EyeSegDataset(Dataset):
         self.cat = {}
         self.split = split
         self.normal_channel = normal_channel
-        self.folder =  'val' #self.split
+        self.folder =  self.split
         self.data_dir = os.path.join(root, self.folder)
 
         self.datapath = []
@@ -206,8 +206,11 @@ class EyeSegDataset(Dataset):
             fn = self.datapath[index]
             data = self.load_point_cloud(fn)
             point_set = data[:, 0:3]
-            labels_path = osp.join(self.data_dir, fn, "labels.npy")
-            seg = np.load(labels_path).astype(np.int32) 
+            if self.split != "test":
+                labels_path = osp.join(self.data_dir, fn, "labels.npy")
+                seg = np.load(labels_path).astype(np.int32) 
+            else:
+                seg = np.zeros((point_set.shape[0],))
             # seg = data[:, -1].astype(np.int32)
             if len(self.cache) < self.cache_size:
                 self.cache[index] = (point_set,fn, seg)
@@ -230,7 +233,6 @@ class EyeSegDataset(Dataset):
 
     def load_point_cloud(self,filepath):
         pointCloudPath = osp.join(self.data_dir,filepath,"pointcloud.ply")
-        
         plydata = PlyData.read(pointCloudPath)
         return np.array(np.transpose(np.stack((plydata['vertex']['x'],plydata['vertex']['y'],plydata['vertex']['z'])))).astype(np.float32)
 
