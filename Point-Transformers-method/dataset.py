@@ -205,10 +205,12 @@ class EyeSegDataset(Dataset):
         else:
             fn = self.datapath[index]
             data = self.load_point_cloud(fn)
+            image = self.load_image(fn)
+            assert image.shape[0] == 2048
             point_set = data[:, 0:3]
             if self.split != "test":
                 labels_path = osp.join(self.data_dir, fn, "labels.npy")
-                seg = np.load(labels_path).astype(np.int32) 
+                seg = np.load(labels_path).astype(np.int8) 
             else:
                 seg = np.zeros((point_set.shape[0],))
             # seg = data[:, -1].astype(np.int32)
@@ -236,6 +238,10 @@ class EyeSegDataset(Dataset):
         plydata = PlyData.read(pointCloudPath)
         return np.array(np.transpose(np.stack((plydata['vertex']['x'],plydata['vertex']['y'],plydata['vertex']['z'])))).astype(np.float32)
 
+    def load_image(self,filepath):
+        image_path = osp.join(self.data_dir, filepath, "image.npy")
+        image = np.load(image_path).astype(np.float32)
+        return image
 
     def __len__(self):
         return len(self.datapath)
@@ -244,6 +250,6 @@ class EyeSegDataset(Dataset):
 if __name__ == '__main__':
     data = EyeSegDataset('data', split='val')
     DataLoader = torch.utils.data.DataLoader(data, batch_size=12, shuffle=True)
-    for point,label in DataLoader:
+    for point,fn,label in DataLoader:
         print(point.shape)
         print(label.shape)

@@ -125,7 +125,9 @@ class PointTransformerSeg(nn.Module):
             nn.Linear(64, n_c)
         )
     
-    def forward(self, x):
+    def forward(self, x, y):
+        #x is point cloud, y is images 
+        #get features from y
         points, xyz_and_feats = self.backbone(x)
         xyz = xyz_and_feats[-1][0]
         points = self.transformer2(xyz, self.fc2(points))[0]

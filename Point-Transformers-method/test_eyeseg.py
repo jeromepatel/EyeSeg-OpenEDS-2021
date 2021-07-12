@@ -70,10 +70,11 @@ def main(args):
 
     root = hydra.utils.to_absolute_path('data/')
     args.batch_size = 1
+    args.test_split = 'val'
 
     # TRAIN_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='train', normal_channel=args.normal)
     # trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=4, drop_last=True)
-    TEST_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='test', normal_channel=args.normal)
+    TEST_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split=args.test_split, normal_channel=args.normal)
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=4)
 
     '''MODEL LOADING'''
@@ -104,6 +105,8 @@ def main(args):
     MOMENTUM_ORIGINAL = 0.1
     MOMENTUM_DECCAY = 0.5
     MOMENTUM_DECCAY_STEP = args.step_size
+    
+    SAVE_LABELS = False
 
     best_acc = 0
     global_epoch = 0
@@ -130,7 +133,8 @@ def main(args):
             total_correct = 0
             total_seen = 0
             total_seen_class = [0 for _ in range(num_part)]
-            total_correct_class = [0 for _ in range(num_part)]
+            total_correct_class = [0 for _ in range(num_part)] 
+            total_iou_deno_class = [0 for _ in range(num_part)] 
             shape_ious = {cat: [] for cat in seg_classes.keys()}
             seg_label_to_cat = {}  # {0:Airplane, 1:Airplane, ...49:Table}
 
@@ -145,7 +149,7 @@ def main(args):
                 filepath = filepath[0]
                 cur_batch_size, NUM_POINT, _ = points.size()
                 points,  target = points.float().cuda(), target.long().cuda()
-                seg_pred = classifier(points)
+                seg_pred = classifier(points,torch.Tensor(np.zeros((1,2048,2048))).cuda())
                 sparse_labels = torch.argmax(seg_pred[0], dim=1).cpu().data.numpy()
                 assert sparse_labels.shape[0] != 1 
                 #run interpolation
@@ -153,19 +157,56 @@ def main(args):
                 #convert to full size labels from sparse points, dense points, and sparse labels
                 
                 #read dense points
-                dense_points = read_densePoints(root,'test',filepath)
+                dense_points = read_densePoints(root,args.test_split,filepath)
                 dense_points = pc_normalize(dense_points)
                 sparse_points = points.cpu().data.numpy()
                 sparse_points = sparse_points.reshape(sparse_points.shape[1],3)
                 
                 # print(sparse_labels.shape, sparse_points.shape, dense_points.shape)
+                
                 dense_labels = interpolate_dense_labels(sparse_points, sparse_labels, dense_points)
-                os.makedirs("output/",exist_ok=True)
-                np.save(f"output/{filepath}.npy",dense_labels)
-                filenames.append(f"Point-Transformers-method/log/eyeseg/Hengshuang/output/{filepath}.npy")
+                
+                if SAVE_LABELS:
+                    #save interpolated predictions
+                    os.makedirs("output/",exist_ok=True)
+                    np.save(f"output/{filepath}.npy",dense_labels)
+                    filenames.append(f"Point-Transformers-method/log/eyeseg/Hengshuang/output/{filepath}.npy")
                 # print(dense_labels.shape)
                 
-                #save interpolated predictions
+                seg_pred_intmd = seg_pred.contiguous().view(-1, num_category)
+                pred_choice = seg_pred_intmd.cpu().data.max(1)[1].numpy()         
+                
+                # print(sparse_labels.shape, pred_choice.shape,seg_pred_intmd.shape)
+                # print(sparse_labels == pred_choice)
+                
+                batch_label = target.view(-1, 1)[:, 0].cpu().data.numpy()
+                target = target.view(-1, 1)[:, 0]
+                
+                
+                correct = np.sum(pred_choice == batch_label)
+                total_correct += correct
+                total_seen += (args.batch_size * args.num_point)
+                
+                for l in range(num_category):
+                    total_seen_class[l] += np.sum((batch_label == l))
+                    total_correct_class[l] += np.sum((pred_choice == l) & (batch_label == l))
+                    total_iou_deno_class[l] += np.sum(((pred_choice == l) | (batch_label == l)))
+            
+                print(total_correct_class[0]/total_seen)
+            
+            mIoU = np.mean(np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float32) + 1e-6))
+            logger.info('Training accuracy for sparse labels: %f' % (total_correct / float(total_seen)))
+            logger.info('The mean IOU is %f' %(mIoU))
+            
+            iou_per_class_str = '------- IoU --------\n'
+            for l in range(num_category):
+                iou_per_class_str += 'class %s IoU: %.3f \n' % (
+                    seg_label_to_cat[l] + ' ' * (5 - len(seg_label_to_cat[l])),
+                    total_correct_class[l] / float(total_iou_deno_class[l]))
+            
+            logger.info(iou_per_class_str)
+            
+                
                 
                 # os.makedirs(f"{filepath}/",exist_ok = True)
                 # test_dict = {'points':points,'target':target,'seg_pred':seg_pred}

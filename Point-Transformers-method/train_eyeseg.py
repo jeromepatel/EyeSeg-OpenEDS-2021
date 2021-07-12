@@ -47,7 +47,7 @@ def main(args):
 
     root = hydra.utils.to_absolute_path('data/')
 
-    TRAIN_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='train', normal_channel=args.normal)
+    TRAIN_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='val', normal_channel=args.normal)
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=4, drop_last=True)
     TEST_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='val', normal_channel=args.normal)
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=4)
@@ -114,7 +114,7 @@ def main(args):
         classifier = classifier.train()
 
         '''learning one epoch'''
-        for i, (points,  target) in tqdm(enumerate(trainDataLoader), total=len(trainDataLoader), smoothing=0.9):
+        for i, (points,fn,  target) in tqdm(enumerate(trainDataLoader), total=len(trainDataLoader), smoothing=0.9):
             points = points.data.numpy()
             # points[:, :, 0:3] = provider.random_scale_point_cloud(points[:, :, 0:3])
             # points[:, :, 0:3] = provider.shift_point_cloud(points[:, :, 0:3])
@@ -123,7 +123,8 @@ def main(args):
             # print(points.shape, label, target.shape,k.shape)
             points,  target = points.float().cuda(), target.long().cuda()
             optimizer.zero_grad()
-            seg_pred = classifier(points)
+            seg_pred = classifier(points,torch.Tensor(np.zeros((1,2048,2048))).cuda())
+            # seg_pred = classifier(points)
             del points
             # seg_pred = classifier(torch.cat([points, to_categorical(label, num_category).repeat(1, points.shape[1], 1)], -1))
             # print(seg_pred.shape, target[:10])
@@ -155,7 +156,7 @@ def main(args):
 
             classifier = classifier.eval()
 
-            for batch_id, (points, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
+            for batch_id, (points,fn, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
                 cur_batch_size, NUM_POINT, _ = points.size()
                 points,  target = points.float().cuda(), target.long().cuda()
                 seg_pred = classifier(points)
