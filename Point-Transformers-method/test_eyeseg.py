@@ -185,20 +185,20 @@ def main(args):
                 
                 correct = np.sum(pred_choice == batch_label)
                 total_correct += correct
-                total_seen += (args.batch_size * args.num_point)
+                total_seen += (args.batch_size * NUM_POINT)
                 
                 for l in range(num_category):
                     total_seen_class[l] += np.sum((batch_label == l))
                     total_correct_class[l] += np.sum((pred_choice == l) & (batch_label == l))
                     total_iou_deno_class[l] += np.sum(((pred_choice == l) | (batch_label == l)))
             
-                print(total_correct_class[0]/total_seen)
+                # print(total_correct_class[0]/total_seen) acc for pupil 
             
             mIoU = np.mean(np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float32) + 1e-6))
             logger.info('Training accuracy for sparse labels: %f' % (total_correct / float(total_seen)))
             logger.info('The mean IOU is %f' %(mIoU))
             
-            iou_per_class_str = '------- IoU --------\n'
+            iou_per_class_str = '\n------- IoU --------\n'
             for l in range(num_category):
                 iou_per_class_str += 'class %s IoU: %.3f \n' % (
                     seg_label_to_cat[l] + ' ' * (5 - len(seg_label_to_cat[l])),
@@ -223,9 +223,10 @@ def main(args):
                 # correct = np.sum(cur_pred_val == target)
                 # total_correct += correct
                 # total_seen += (cur_batch_size * NUM_POINT)
-
-            with open("submissionFiles.txt","w") as f:
-                f.write("\n".join(filenames))
+            
+            if SAVE_LABELS:
+                with open("submissionFiles.txt","w") as f:
+                    f.write("\n".join(filenames))
             
         #     test_metrics['accuracy'] = total_correct / float(total_seen)
     

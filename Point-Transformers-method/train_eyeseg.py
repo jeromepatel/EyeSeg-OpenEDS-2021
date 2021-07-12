@@ -94,8 +94,8 @@ def main(args):
 
     best_acc = 0
     global_epoch = 0
-    best_class_avg_iou = 0
-    best_inctance_avg_iou = 0
+    best_avg_iou = 0
+   
 
     for epoch in range(start_epoch, args.epoch):
         mean_correct = []
@@ -147,6 +147,7 @@ def main(args):
             total_seen = 0
             total_seen_class = [0 for _ in range(num_part)]
             total_correct_class = [0 for _ in range(num_part)]
+            total_iou_deno_class = [0 for _ in range(num_part)] 
             shape_ious = {cat: [] for cat in seg_classes.keys()}
             seg_label_to_cat = {}  # {0:Airplane, 1:Airplane, ...49:Table}
 
@@ -156,62 +157,49 @@ def main(args):
 
             classifier = classifier.eval()
 
-            for batch_id, (points,fn, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
+            for batch_id, (points,filepath, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
+                filepath = filepath[0]
                 cur_batch_size, NUM_POINT, _ = points.size()
                 points,  target = points.float().cuda(), target.long().cuda()
-                seg_pred = classifier(points)
-                if batch_id == 0:
-                    test_dict = {'points':points,'target':target,'seg_pred':seg_pred}
-                    torch.save(test_dict,"first_batch.pth")
-                cur_pred_val = seg_pred.cpu().data.numpy()
-                cur_pred_val_logits = cur_pred_val
-                cur_pred_val = np.zeros((cur_batch_size, NUM_POINT)).astype(np.int32)
-                target = target.cpu().data.numpy()
+                seg_pred = classifier(points,torch.Tensor(np.zeros((1,2048,2048))).cuda())
+                sparse_labels = torch.argmax(seg_pred[0], dim=1).cpu().data.numpy()
+                assert sparse_labels.shape[0] != 1 
 
-                for i in range(cur_batch_size):
-                    cat = seg_label_to_cat[target[i, 0]]
-                    logits = cur_pred_val_logits[i, :, :]
-                    cur_pred_val[i, :] = np.argmax(logits[:, seg_classes[cat]], 1) + seg_classes[cat][0]
-
-                correct = np.sum(cur_pred_val == target)
+                seg_pred_intmd = seg_pred.contiguous().view(-1, num_category)
+                pred_choice = seg_pred_intmd.cpu().data.max(1)[1].numpy()         
+                
+                # print(sparse_labels.shape, pred_choice.shape,seg_pred_intmd.shape)
+                # print(sparse_labels == pred_choice)
+                
+                batch_label = target.view(-1, 1)[:, 0].cpu().data.numpy()
+                target = target.view(-1, 1)[:, 0]
+                
+                
+                correct = np.sum(pred_choice == batch_label)
                 total_correct += correct
-                total_seen += (cur_batch_size * NUM_POINT)
+                total_seen += (args.batch_size * NUM_POINT)
+                
+                for l in range(num_category):
+                    total_seen_class[l] += np.sum((batch_label == l))
+                    total_correct_class[l] += np.sum((pred_choice == l) & (batch_label == l))
+                    total_iou_deno_class[l] += np.sum(((pred_choice == l) | (batch_label == l)))
+                
 
-                for l in range(num_part):
-                    total_seen_class[l] += np.sum(target == l)
-                    total_correct_class[l] += (np.sum((cur_pred_val == l) & (target == l)))
-
-                for i in range(cur_batch_size):
-                    segp = cur_pred_val[i, :]
-                    segl = target[i, :]
-                    cat = seg_label_to_cat[segl[0]]
-                    part_ious = [0.0 for _ in range(len(seg_classes[cat]))]
-                    for l in seg_classes[cat]:
-                        if (np.sum(segl == l) == 0) and (
-                                np.sum(segp == l) == 0):  # part is not present, no prediction as well
-                            part_ious[l - seg_classes[cat][0]] = 1.0
-                        else:
-                            part_ious[l - seg_classes[cat][0]] = np.sum((segl == l) & (segp == l)) / float(
-                                np.sum((segl == l) | (segp == l)))
-                    shape_ious[cat].append(np.mean(part_ious))
-
-            all_shape_ious = []
-            for cat in shape_ious.keys():
-                for iou in shape_ious[cat]:
-                    all_shape_ious.append(iou)
-                shape_ious[cat] = np.mean(shape_ious[cat])
-            mean_shape_ious = np.mean(list(shape_ious.values()))
-            test_metrics['accuracy'] = total_correct / float(total_seen)
-            test_metrics['class_avg_accuracy'] = np.mean(
-                np.array(total_correct_class) / np.array(total_seen_class, dtype=np.float))
-            for cat in sorted(shape_ious.keys()):
-                logger.info('eval mIoU of %s %f' % (cat + ' ' * (14 - len(cat)), shape_ious[cat]))
-            test_metrics['class_avg_iou'] = mean_shape_ious
-            test_metrics['inctance_avg_iou'] = np.mean(all_shape_ious)
-
-        logger.info('Epoch %d test Accuracy: %f  Class avg mIOU: %f   Inctance avg mIOU: %f' % (
-            epoch + 1, test_metrics['accuracy'], test_metrics['class_avg_iou'], test_metrics['inctance_avg_iou']))
-        if (test_metrics['inctance_avg_iou'] >= best_inctance_avg_iou):
+        mIoU = np.mean(np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float32) + 1e-6))
+        test_metrics['accuracy'] = total_correct / float(total_seen)
+        test_metrics['miou'] = mIoU
+        logger.info('Test accuracy for sparse labels: %f' % (test_metrics['accuracy']))
+        logger.info('The mean IOU is %f' %(mIoU))
+        
+        iou_per_class_str = '\n------- IoU --------\n'
+        for l in range(num_category):
+            iou_per_class_str += 'class %s IoU: %.3f \n' % (
+                seg_label_to_cat[l] + ' ' * (5 - len(seg_label_to_cat[l])),
+                total_correct_class[l] / float(total_iou_deno_class[l]))
+            
+        logger.info(iou_per_class_str)
+        
+        if (test_metrics['miou'] >= best_avg_iou):
             logger.info('Save model...')
             savepath = 'best_model.pth'
             logger.info('Saving at %s' % savepath)
@@ -219,8 +207,7 @@ def main(args):
                 'epoch': epoch,
                 'train_acc': train_instance_acc,
                 'test_acc': test_metrics['accuracy'],
-                'class_avg_iou': test_metrics['class_avg_iou'],
-                'inctance_avg_iou': test_metrics['inctance_avg_iou'],
+                'miou': test_metrics['miou'],
                 'model_state_dict': classifier.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
             }
@@ -229,13 +216,10 @@ def main(args):
 
         if test_metrics['accuracy'] > best_acc:
             best_acc = test_metrics['accuracy']
-        if test_metrics['class_avg_iou'] > best_class_avg_iou:
-            best_class_avg_iou = test_metrics['class_avg_iou']
-        if test_metrics['inctance_avg_iou'] > best_inctance_avg_iou:
-            best_inctance_avg_iou = test_metrics['inctance_avg_iou']
+        if test_metrics['miou'] > best_avg_iou:
+            best_class_avg_iou = test_metrics['miou']
         logger.info('Best accuracy is: %.5f' % best_acc)
-        logger.info('Best class avg mIOU is: %.5f' % best_class_avg_iou)
-        logger.info('Best inctance avg mIOU is: %.5f' % best_inctance_avg_iou)
+        logger.info('Best mIOU is: %.5f' % best_class_avg_iou)
         global_epoch += 1
 
 
