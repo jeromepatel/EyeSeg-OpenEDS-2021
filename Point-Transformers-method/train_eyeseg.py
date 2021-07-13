@@ -47,7 +47,7 @@ def main(args):
 
     root = hydra.utils.to_absolute_path('data/')
 
-    TRAIN_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='val', normal_channel=args.normal)
+    TRAIN_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='train', normal_channel=args.normal)
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=4, drop_last=True)
     TEST_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='val', normal_channel=args.normal)
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=4)
