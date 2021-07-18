@@ -35,17 +35,21 @@ class eyeSegmentation(Dataset):
         
         for file in os.listdir(self.filepath):   
             if os.path.isdir(osp.join(self.filepath,file)):
-                # labels_path = osp.join(self.filepath, file, "labels.npy")
-                # label = np.load(labels_path)
-                # #print(label.shape[0])
-                # if label.shape[0] == 9290 :
-                #     print(file,label.shape[0])
-                # elif label.shape[0] == 67931:
-                #     print(file,label.shape[0])
                 pointCloudPath = osp.join(self.filepath,file,"pointcloud.ply")
-        
                 plydata = PlyData.read(pointCloudPath)
                 pts = np.array(np.transpose(np.stack((plydata['vertex']['x'],plydata['vertex']['y'],plydata['vertex']['z'])))).astype(np.float32)
+                if self.split == 'test':
+                    label = np.zeros((pts.shape[0],))
+                else:
+                    labels_path = osp.join(self.filepath, file, "labels.npy")
+                    label = np.load(labels_path)
+                #print(label.shape[0])
+                if label.shape[0] == 9290 :
+                    print(file,label.shape[0], "remove outlier")
+                elif label.shape[0] == 67931:
+                    print(file,label.shape[0], "remove outlier")
+                elif label.shape[0] <= 10096:
+                     print(file,label.shape[0], "cuation: check for test set point sizes")
                 finalSizes.append(pts.shape[0])
                 self.listalldir.append(file)
                 metaData = file.split("_")
@@ -92,10 +96,10 @@ class eyeSegmentation(Dataset):
 # # for sweep in seq_path.iterdir():
 # #     print(seq_str, sweep.stem)
 
-eyeSeg = eyeSegmentation("D:/OpenEDS 2021/","val")
+eyeSeg = eyeSegmentation("C:/Users/jyotm/Documents/OpenEDS 2021 3d point cloud segmentation/Point-Transformers-method/data","train")
 DataLoader = torch.utils.data.DataLoader(eyeSeg, batch_size=1, shuffle=True)
-for point,label in DataLoader:
-    print(point.shape)
+# for point,label in DataLoader:
+#     print(point.shape)
 
 ## To print the visualization results of Pointcloud sizes
 
@@ -104,12 +108,14 @@ print(finalSizes[:10],finalSizes[-10:])
 # with open("NumPoints.txt","w") as f:
 #     f.write("\n".join(map(str,finalSizes)))
     
-# import matplotlib.pyplot as plt
-# import seaborn as sns
-# import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
 
 # with open("NumPoints.txt","r") as f:
 #     str_data = list(map(int,f.read().split("\n")))
 #     print(str_data)
 #     str_data.pop()
 # sns.distplot(str_data)
+
+sns.distplot(finalSizes)

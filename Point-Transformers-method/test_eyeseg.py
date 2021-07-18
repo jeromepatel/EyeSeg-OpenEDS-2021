@@ -113,7 +113,7 @@ def main(args):
     best_class_avg_iou = 0
     best_inctance_avg_iou = 0
 
-    for epoch in range(start_epoch, args.epoch):
+    for epoch in range(start_epoch, start_epoch + 1):
         mean_correct = []
 
         logger.info('Epoch %d (%d/%s):' % (global_epoch + 1, epoch + 1, args.epoch))
@@ -145,11 +145,12 @@ def main(args):
             classifier = classifier.eval()
             filenames = []
             
-            for batch_id, (points,filepath, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
+            for batch_id, (points,filepath,img, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
                 filepath = filepath[0]
+                # print(points.shape, img.shape)
                 cur_batch_size, NUM_POINT, _ = points.size()
                 points,  target = points.float().cuda(), target.long().cuda()
-                seg_pred = classifier(points,torch.Tensor(np.zeros((1,2048,2048))).cuda())
+                seg_pred = classifier(points,img.cuda())
                 sparse_labels = torch.argmax(seg_pred[0], dim=1).cpu().data.numpy()
                 assert sparse_labels.shape[0] != 1 
                 #run interpolation
@@ -163,8 +164,11 @@ def main(args):
                 sparse_points = sparse_points.reshape(sparse_points.shape[1],3)
                 
                 # print(sparse_labels.shape, sparse_points.shape, dense_points.shape)
-                
-                dense_labels = interpolate_dense_labels(sparse_points, sparse_labels, dense_points)
+                if sparse_labels.shape[0] >= dense_points.shape[0]:
+                    dense_labels = sparse_labels.copy()
+                    logger.info(f"skipped an interpolation with {sparse_labels.shape[0]} points")
+                else:    
+                    dense_labels = interpolate_dense_labels(sparse_points, sparse_labels, dense_points, k = 7)
                 
                 if SAVE_LABELS:
                     #save interpolated predictions

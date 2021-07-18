@@ -101,6 +101,31 @@ class PointTransformerSeg(nn.Module):
         super().__init__()
         self.backbone = Backbone(cfg)
         npoints, nblocks, nneighbor, n_c, d_points = cfg.num_point, cfg.model.nblocks, cfg.model.nneighbor, cfg.num_class, cfg.input_dim
+        input_channels, output_channels, multiply_rate = 1, 4, 2
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(input_channels, output_channels, kernel_size=(3,3)),
+            nn.MaxPool2d(2,2),
+            nn.Conv2d(output_channels, output_channels * multiply_rate, kernel_size = (3,3)),
+            nn.MaxPool2d(2,2),
+            nn.LeakyReLU(),
+            nn.Conv2d(output_channels * multiply_rate, output_channels * (multiply_rate**2), kernel_size = (5,5)),
+            nn.MaxPool2d(2,2),
+            nn.Conv2d(output_channels * (multiply_rate**2), output_channels * (multiply_rate**3), kernel_size = (5,5)),
+            nn.MaxPool2d(2,2),
+            nn.LeakyReLU(),
+            nn.Conv2d(output_channels * (multiply_rate**3), output_channels * (multiply_rate**3), kernel_size = (7,7)),
+            nn.MaxPool2d(2,2),
+            nn.Conv2d(output_channels * (multiply_rate**3), output_channels * 10, kernel_size = (7,7)),
+            nn.MaxPool2d(2,2),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(num_features = output_channels * 10),
+            nn.Dropout(p=0.2),
+            nn.Flatten(start_dim = 2,end_dim = -1),
+            nn.Linear(676, npoints//40),
+            nn.Flatten(),
+            nn.Linear(40 * (npoints//40) , npoints)
+            )
+        
         self.fc2 = nn.Sequential(
             nn.Linear(32 * 2 ** nblocks, 512),
             nn.ReLU(),
@@ -126,8 +151,11 @@ class PointTransformerSeg(nn.Module):
         )
     
     def forward(self, x, y):
-        #x is point cloud, y is images 
+        #x is point cloud, y is image
         #get features from y
+        embeddings = self.conv1(y)
+        embeddings= embeddings.reshape(-1,embeddings.shape[1],1)
+        x = torch.cat((x, embeddings),-1)
         points, xyz_and_feats = self.backbone(x)
         xyz = xyz_and_feats[-1][0]
         points = self.transformer2(xyz, self.fc2(points))[0]

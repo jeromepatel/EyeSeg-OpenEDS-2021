@@ -107,7 +107,7 @@ print("")
 
 train_image = np.load(point_name+"image.npy")
 print(train_image.shape)
-# plt.imshow(train_image)
+plt.imshow(train_image)
 
 train_labels = np.load(point_name+"labels.npy")
 print(set(train_labels))

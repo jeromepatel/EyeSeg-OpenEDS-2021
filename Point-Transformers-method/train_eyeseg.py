@@ -61,7 +61,9 @@ def main(args):
     shutil.copy(hydra.utils.to_absolute_path('models/{}/model.py'.format(args.model.name)), '.')
     torch.cuda.empty_cache()
     classifier = getattr(importlib.import_module('models.{}.model'.format(args.model.name)), 'PointTransformerSeg')(args).cuda()
-    criterion = torch.nn.CrossEntropyLoss()
+    weights = [5.0, 2.5, 2.5, 2.0, 1.0]
+    class_weights = torch.FloatTensor(weights).cuda()
+    criterion = torch.nn.CrossEntropyLoss(weight=class_weights)
 
     try:
         checkpoint = torch.load('best_model.pth')
@@ -114,8 +116,9 @@ def main(args):
         classifier = classifier.train()
 
         '''learning one epoch'''
-        for i, (points,fn,  target) in tqdm(enumerate(trainDataLoader), total=len(trainDataLoader), smoothing=0.9):
+        for i, (points,fn,img, target) in tqdm(enumerate(trainDataLoader), total=len(trainDataLoader), smoothing=0.9):
             points = points.data.numpy()
+            # print(points.shape, img.shape)
             # points[:, :, 0:3] = provider.random_scale_point_cloud(points[:, :, 0:3])
             # points[:, :, 0:3] = provider.shift_point_cloud(points[:, :, 0:3])
             points = torch.Tensor(points)
@@ -123,17 +126,17 @@ def main(args):
             # print(points.shape, label, target.shape,k.shape)
             points,  target = points.float().cuda(), target.long().cuda()
             optimizer.zero_grad()
-            seg_pred = classifier(points,torch.Tensor(np.zeros((1,2048,2048))).cuda())
+            seg_pred = classifier(points,img.cuda())
             # seg_pred = classifier(points)
             del points
             # seg_pred = classifier(torch.cat([points, to_categorical(label, num_category).repeat(1, points.shape[1], 1)], -1))
-            # print(seg_pred.shape, target[:10])
             seg_pred = seg_pred.contiguous().view(-1, num_part)
             target = target.view(-1, 1)[:, 0]
             pred_choice = seg_pred.data.max(1)[1]
 
             correct = pred_choice.eq(target.data).cpu().sum()
             mean_correct.append(correct.item() / (args.batch_size * args.num_point))
+            print(seg_pred.shape, target.shape)
             loss = criterion(seg_pred, target)
             loss.backward()
             optimizer.step()
@@ -157,11 +160,11 @@ def main(args):
 
             classifier = classifier.eval()
 
-            for batch_id, (points,filepath, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
+            for batch_id, (points,filepath,img, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader), smoothing=0.9):
                 filepath = filepath[0]
                 cur_batch_size, NUM_POINT, _ = points.size()
                 points,  target = points.float().cuda(), target.long().cuda()
-                seg_pred = classifier(points,torch.Tensor(np.zeros((1,2048,2048))).cuda())
+                seg_pred = classifier(points,img.cuda())
                 sparse_labels = torch.argmax(seg_pred[0], dim=1).cpu().data.numpy()
                 assert sparse_labels.shape[0] != 1 
 
@@ -217,9 +220,9 @@ def main(args):
         if test_metrics['accuracy'] > best_acc:
             best_acc = test_metrics['accuracy']
         if test_metrics['miou'] > best_avg_iou:
-            best_class_avg_iou = test_metrics['miou']
+            best_avg_iou = test_metrics['miou']
         logger.info('Best accuracy is: %.5f' % best_acc)
-        logger.info('Best mIOU is: %.5f' % best_class_avg_iou)
+        logger.info('Best mIOU is: %.5f' % best_avg_iou)
         global_epoch += 1
 
 

@@ -196,17 +196,18 @@ class EyeSegDataset(Dataset):
         #     print(cat, self.seg_classes[cat])
 
         self.cache = {}  # from index to (point_set, cls, seg) tuple
-        self.cache_size = 1
+        self.cache_size = 5
 
 
     def __getitem__(self, index):
         if index in self.cache:
-            point_set, fn, seg = self.cache[index]
+            point_set, fn,image, seg = self.cache[index]
         else:
             fn = self.datapath[index]
             data = self.load_point_cloud(fn)
             image = self.load_image(fn)
-            assert image.shape[0] == 2048
+            image = image.reshape(1,image.shape[0], image.shape[1])
+            # assert image.shape[0] == 2048
             point_set = data[:, 0:3]
             if self.split != "test":
                 labels_path = osp.join(self.data_dir, fn, "labels.npy")
@@ -215,12 +216,18 @@ class EyeSegDataset(Dataset):
                 seg = np.zeros((point_set.shape[0],))
             # seg = data[:, -1].astype(np.int32)
             if len(self.cache) < self.cache_size:
-                self.cache[index] = (point_set,fn, seg)
+                self.cache[index] = (point_set,fn,image, seg)
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
 
         # if self.split == 'test':
         #     return point_set,fn,seg
-        choice = np.random.choice(len(seg), self.npoints, replace=False)
+        if self.split == 'test' and self.npoints > point_set.shape[0]:
+            choice = np.random.choice(len(seg),point_set.shape[0],replace=False)
+        elif self.split != 'test' and self.npoints > point_set.shape[0]:
+            choice = np.random.choice(len(seg), self.npoints, replace=True)
+        else:
+            choice = np.random.choice(len(seg), self.npoints, replace=False)
+        
         # resample
         point_set = point_set[choice, :]
         seg = seg[choice]
@@ -231,7 +238,7 @@ class EyeSegDataset(Dataset):
         #     point_set = point_set[choice, :]
         #     seg = seg[choice]
 
-        return point_set,fn, seg
+        return point_set,fn, image, seg
 
     def load_point_cloud(self,filepath):
         pointCloudPath = osp.join(self.data_dir,filepath,"pointcloud.ply")
