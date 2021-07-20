@@ -79,7 +79,7 @@ def main(args):
 
     '''MODEL LOADING'''
     # args.input_dim = (6 if args.normal else 3) + 16
-    args.input_dim = 3 #(6 if args.normal else 3)
+    args.input_dim = (4 if args.normal else 3)
     args.num_class = 5
     num_category = 5
     num_part = args.num_class

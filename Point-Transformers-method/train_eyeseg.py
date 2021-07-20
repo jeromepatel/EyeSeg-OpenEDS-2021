@@ -41,6 +41,7 @@ def main(args):
 
     '''HYPER PARAMETER'''
     # os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
+    # os.environ['HYDRA_FULL_ERROR'] = str(1)
     logger = logging.getLogger(__name__)
 
     # print(args.pretty())
@@ -48,20 +49,23 @@ def main(args):
     root = hydra.utils.to_absolute_path('data/')
 
     TRAIN_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='train', normal_channel=args.normal)
-    trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=4, drop_last=True)
+    trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=1, drop_last=True)
     TEST_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split='val', normal_channel=args.normal)
-    testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=4)
+    testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=1)
+
 
     '''MODEL LOADING'''
     # args.input_dim = (6 if args.normal else 3) + 16
-    args.input_dim = 3 #(6 if args.normal else 3)
+    args.input_dim = (4 if args.normal else 3)
     args.num_class = 5
     num_category = 5
     num_part = args.num_class
     shutil.copy(hydra.utils.to_absolute_path('models/{}/model.py'.format(args.model.name)), '.')
+    # torch.backends.cudnn.deterministic = True
     torch.cuda.empty_cache()
+    torch.autograd.set_detect_anomaly(True)
     classifier = getattr(importlib.import_module('models.{}.model'.format(args.model.name)), 'PointTransformerSeg')(args).cuda()
-    weights = [5.0, 2.5, 2.5, 2.0, 1.0]
+    weights = [3.0, 2.5, 2.5, 2.0, 0.5]
     class_weights = torch.FloatTensor(weights).cuda()
     criterion = torch.nn.CrossEntropyLoss(weight=class_weights)
 
@@ -117,7 +121,7 @@ def main(args):
 
         '''learning one epoch'''
         for i, (points,fn,img, target) in tqdm(enumerate(trainDataLoader), total=len(trainDataLoader), smoothing=0.9):
-            points = points.data.numpy()
+            # points = points.data.numpy()
             # print(points.shape, img.shape)
             # points[:, :, 0:3] = provider.random_scale_point_cloud(points[:, :, 0:3])
             # points[:, :, 0:3] = provider.shift_point_cloud(points[:, :, 0:3])
@@ -136,7 +140,6 @@ def main(args):
 
             correct = pred_choice.eq(target.data).cpu().sum()
             mean_correct.append(correct.item() / (args.batch_size * args.num_point))
-            print(seg_pred.shape, target.shape)
             loss = criterion(seg_pred, target)
             loss.backward()
             optimizer.step()

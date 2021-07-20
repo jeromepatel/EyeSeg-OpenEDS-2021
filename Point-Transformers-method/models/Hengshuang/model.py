@@ -154,9 +154,10 @@ class PointTransformerSeg(nn.Module):
         #x is point cloud, y is image
         #get features from y
         embeddings = self.conv1(y)
-        embeddings= embeddings.reshape(-1,embeddings.shape[1],1)
-        x = torch.cat((x, embeddings),-1)
-        points, xyz_and_feats = self.backbone(x)
+        # print(embeddings.requires_grad)
+        embeddings= torch.reshape(embeddings,(-1,embeddings.shape[1],1))
+        z = torch.cat((x, embeddings),-1)
+        points, xyz_and_feats = self.backbone(z)
         xyz = xyz_and_feats[-1][0]
         points = self.transformer2(xyz, self.fc2(points))[0]
 

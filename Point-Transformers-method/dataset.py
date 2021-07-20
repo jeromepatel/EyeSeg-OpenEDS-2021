@@ -3,6 +3,7 @@ import os
 from torch.utils.data import Dataset
 import torch
 from pointnet_util import farthest_point_sample, pc_normalize
+from fartheset_point_sample_numpy import FPS
 import json
 import os.path as osp
 from plyfile import PlyData, PlyElement
@@ -231,6 +232,11 @@ class EyeSegDataset(Dataset):
         # resample
         point_set = point_set[choice, :]
         seg = seg[choice]
+        
+        #alternative sampling using farthest point sampling 
+        # f = FPS(point_set)
+        # point_set = f.compute_fps(self.npoints)
+        
         # elif self.split =='val':
         #     self.npoints = 5024
         #     choice = np.random.choice(len(seg), self.npoints, replace=True)

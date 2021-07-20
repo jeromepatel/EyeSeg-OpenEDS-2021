@@ -1,4 +1,4 @@
-batch_size: 2
+batch_size: 3
 epoch: 20
 learning_rate: 1e-3
 gpu: 1
