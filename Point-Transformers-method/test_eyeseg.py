@@ -153,7 +153,6 @@ def main(args):
                 seg_pred = classifier(points,img.cuda())
                 sparse_labels = torch.argmax(seg_pred[0], dim=1).cpu().data.numpy()
                 assert sparse_labels.shape[0] != 1 
-                #run interpolation
                 
                 #convert to full size labels from sparse points, dense points, and sparse labels
                 
@@ -168,6 +167,7 @@ def main(args):
                     dense_labels = sparse_labels.copy()
                     logger.info(f"skipped an interpolation with {sparse_labels.shape[0]} points")
                 else:    
+                    #run interpolation
                     dense_labels = interpolate_dense_labels(sparse_points, sparse_labels, dense_points, k = 7)
                 
                 if SAVE_LABELS:
@@ -201,6 +201,8 @@ def main(args):
             mIoU = np.mean(np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float32) + 1e-6))
             logger.info('Training accuracy for sparse labels: %f' % (total_correct / float(total_seen)))
             logger.info('The mean IOU is %f' %(mIoU))
+            mIOU_4_classes = np.mean(np.array(total_correct_class[:4]) / (np.array(total_iou_deno_class[:4], dtype=np.float32) + 1e-6))
+            logger.info('The mean IOU for 4 classes' %(mIOU_4_classes))
             
             iou_per_class_str = '\n------- IoU --------\n'
             for l in range(num_category):

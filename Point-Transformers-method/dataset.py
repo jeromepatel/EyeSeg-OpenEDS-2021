@@ -7,6 +7,9 @@ from fartheset_point_sample_numpy import FPS
 import json
 import os.path as osp
 from plyfile import PlyData, PlyElement
+from collections import Counter 
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 class ModelNetDataLoader(Dataset):
     def __init__(self, root, npoint=1024, split='train', uniform=False, normal_channel=True, cache_size=15000):
@@ -229,6 +232,7 @@ class EyeSegDataset(Dataset):
         else:
             choice = np.random.choice(len(seg), self.npoints, replace=False)
         
+        
         # resample
         point_set = point_set[choice, :]
         seg = seg[choice]
@@ -261,8 +265,19 @@ class EyeSegDataset(Dataset):
 
 
 if __name__ == '__main__':
-    data = EyeSegDataset('data', split='val')
-    DataLoader = torch.utils.data.DataLoader(data, batch_size=12, shuffle=True)
-    for point,fn,label in DataLoader:
-        print(point.shape)
-        print(label.shape)
+    data = EyeSegDataset('data', split='train',npoints=10096)
+    lst = {i:0 for i in range(5)}
+    DataLoader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=True)
+    for point,fn,img, label in tqdm(DataLoader):
+        # print(point.shape)
+        # print(label.shape)
+        k = label.data.numpy().astype(int)
+        meta_data = Counter(list(k[0]))
+        # print(meta_data)
+        for k in meta_data.keys():
+            lst[k] += 1
+        # print(Counter(list(k[0])))
+        # print([m.shape for m in k])
+    print(lst)
+    # plt.bar(list(lst.keys()), list(lst.values()), width = 0.9, color = "red")
+    # plt.show()

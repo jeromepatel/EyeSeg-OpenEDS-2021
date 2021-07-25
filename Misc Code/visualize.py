@@ -10,9 +10,9 @@ import os.path as osp
 import warnings
 warnings.filterwarnings("ignore")
 
-visualize =  1
+visualize =  0
 
-point_name = "C:/Users/jyotm/Documents/OpenEDS 2021 3d point cloud segmentation/Point-Transformers-method/data/val/0024_pose_1/"
+point_name = "C:/Users/jyotm/Documents/OpenEDS 2021 3d point cloud segmentation/Point-Transformers-method/data/val/0028_pose_5/"
 print(os.listdir(point_name))
 
 print("Load a ply point cloud, print it, and render it")
@@ -44,6 +44,7 @@ red = (onehot_encoded[:,0]  + onehot_encoded[:,2]  *3 ) / 4
 green = (onehot_encoded[:,1] + onehot_encoded[:,3] *3) / 4
 blue = (onehot_encoded[:,3] + onehot_encoded[:,4] ) / 2
 
+# red, green, blue = onehot_encoded[:,0], onehot_encoded[:,1], onehot_encoded[:,2]
 # pcd.points = o3d.utility.Vector3dVector(point_set)
 colours = np.vstack([red,green,blue]).transpose()
 print(colours.shape)
@@ -107,7 +108,7 @@ print("")
 
 train_image = np.load(point_name+"image.npy")
 print(train_image.shape)
-plt.imshow(train_image)
+# plt.imshow(train_image)
 
 train_labels = np.load(point_name+"labels.npy")
 print(set(train_labels))
