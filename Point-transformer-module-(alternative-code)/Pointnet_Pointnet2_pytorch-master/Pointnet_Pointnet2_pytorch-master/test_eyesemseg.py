@@ -3,6 +3,7 @@
 Created on Sat Jul 24 22:21:06 2021
 
 @author: jyotm
+usage, eg: python test_eyesemseg.py --log_dir 2021-07-25_22-08 --test_dir test --save_labels True
 """
 import argparse
 import os
@@ -39,7 +40,7 @@ def parse_args():
     parser.add_argument('--num_point', type=int, default=10096, help='point number [default: 4096]')
     parser.add_argument('--log_dir', type=str, required=True, help='experiment root')
     parser.add_argument('--save_labels',type= bool, default = False, help='save prediction labels into folders')
-    parser.add_argument('--valid',type=bool, default = False, help='valid result [default: False]')
+    parser.add_argument('--valid',type=bool, default = True, help='validate result on valid dataset [default: True]')
     parser.add_argument('--test_dir', type=str,default='val', help='test dir')
     parser.add_argument('--k', type=int, default=5, help='k for interpolation [default: 5]')
     parser.add_argument('--num_votes', type=int, default=3, help='aggregate segmentation scores with voting')
@@ -101,6 +102,8 @@ def main(args):
     SAVE_LABELS = args.save_labels
     TEST_DIR = args.test_dir
     num_votes = args.num_votes
+    if TEST_DIR == 'test':
+        args.valid = False
     
     TEST_DATASET = EyeSegDataset(root=root, npoints=args.num_point, split=TEST_DIR, use_val = True)
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=2)
@@ -147,7 +150,12 @@ def main(args):
             sparse_points = points.transpose(1,2).cpu().data.numpy()
             sparse_points = sparse_points[0]
             sparse_label = pred_val.reshape(pred_val.shape[1],)
-            dense_label = interpolate_dense_labels(sparse_points, sparse_label, dense_points, k = args.k)
+            
+            if sparse_label.shape[0] >= dense_points.shape[0]:
+                dense_label = sparse_label.copy()
+                log_string(f"skipped an interpolation with {sparse_label.shape[0]} points")
+            else:
+                dense_label = interpolate_dense_labels(sparse_points, sparse_label, dense_points, k = args.k)
             # print(sparse_label.shape, sparse_points.shape, dense_points.shape,dense_label.shape)
             
             if args.valid:
@@ -161,30 +169,32 @@ def main(args):
                 os.makedirs(outputs_dir,exist_ok=True)
                 np.save(outputs_dir + f"{filepath}.npy",dense_label)
                 filenames.append(outputs_dir + f"{filepath}.npy")
-             
-            for l in range(NUM_CLASSES):
-                total_seen_class[l] += np.sum((batch_label == l))
-                total_correct_class[l] += np.sum((dense_label == l) & (batch_label == l))
-                total_iou_deno_class[l] += np.sum(((dense_label == l) | (batch_label == l)))
-    
-        mIoU = np.mean(np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float) + 1e-6))
-        mIoU_4_class = np.mean(np.array(total_correct_class[:4]) / (np.array(total_iou_deno_class[:4], dtype=np.float) + 1e-6))
-        
-        
-        log_string('eval 4 classes mean IoU: %f' % (mIoU_4_class))
-        log_string('eval point avg class IoU: %f' % (mIoU))
-        
-        iou_per_class_str = '------- IoU --------\n'
-        for l in range(NUM_CLASSES):
-            iou_per_class_str += 'class %s: %.3f \n' % (
-                seg_label_to_cat[l] + ' ' * (14 - len(seg_label_to_cat[l])),
-                total_correct_class[l] / float(total_iou_deno_class[l]))
 
-        log_string(iou_per_class_str)
+            if args.valid:
+                for l in range(NUM_CLASSES):
+                    total_seen_class[l] += np.sum((batch_label == l))
+                    total_correct_class[l] += np.sum((dense_label == l) & (batch_label == l))
+                    total_iou_deno_class[l] += np.sum(((dense_label == l) | (batch_label == l)))
+    
+        if args.valid:
+            mIoU = np.mean(np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float) + 1e-6))
+            mIoU_4_class = np.mean(np.array(total_correct_class[:4]) / (np.array(total_iou_deno_class[:4], dtype=np.float) + 1e-6))
+            
+            
+            log_string('eval 4 classes mean IoU: %f' % (mIoU_4_class))
+            log_string('eval point avg class IoU: %f' % (mIoU))
+            
+            iou_per_class_str = '------- IoU --------\n'
+            for l in range(NUM_CLASSES):
+                iou_per_class_str += 'class %s: %.3f \n' % (
+                    seg_label_to_cat[l] + ' ' * (14 - len(seg_label_to_cat[l])),
+                    total_correct_class[l] / float(total_iou_deno_class[l]))
+
+            log_string(iou_per_class_str)
     
         
         if SAVE_LABELS:
-            with open("submissionFiles.txt","w") as f:
+            with open("submissionFilesSemSeg.txt","w") as f:
                 f.write("\n".join(filenames))
         
 if __name__ == '__main__':

@@ -50,6 +50,8 @@ def parse_args():
     parser.add_argument('--npoint', type=int, default=10096, help='Point Number [default: 10096]')
     parser.add_argument('--step_size', type=int, default=10, help='Decay step for lr decay [default: every 10 epochs]')
     parser.add_argument('--lr_decay', type=float, default=0.7, help='Decay rate for lr decay [default: 0.7]')
+    # parser.add_argument('--knn',type=int, default = 20, help='K nearest neighbours for dgcnn model')
+    # parser.add_argument('--emb_dims', type=int, default=2048, help='Dimension of embeddings')
     # parser.add_argument('--test_area', type=int, default=5, help='Which area to use for test, option: 1-6 [default: 5]')
 
     return parser.parse_args()
@@ -123,10 +125,12 @@ def main(args):
         classname = m.__class__.__name__
         if classname.find('Conv2d') != -1:
             torch.nn.init.xavier_normal_(m.weight.data)
-            torch.nn.init.constant_(m.bias.data, 0.0)
+            if m.bias is not None:
+                torch.nn.init.constant_(m.bias.data, 0.0)
         elif classname.find('Linear') != -1:
             torch.nn.init.xavier_normal_(m.weight.data)
-            torch.nn.init.constant_(m.bias.data, 0.0)
+            if m.bias is not None:
+                torch.nn.init.constant_(m.bias.data, 0.0)
 
     try:
         checkpoint = torch.load(str(experiment_dir) + '/checkpoints/best_model.pth')
@@ -188,8 +192,7 @@ def main(args):
             # points = torch.Tensor(points)
             points, target = points.float().cuda(), target.long().cuda()
             points = points.transpose(2, 1)
-            
-            seg_pred, trans_feat = classifier(points)
+            seg_pred,_, trans_feat = classifier(points)
             seg_pred = seg_pred.contiguous().view(-1, NUM_CLASSES)
 
             batch_label = target.view(-1, 1)[:, 0].cpu().data.numpy()
@@ -236,7 +239,7 @@ def main(args):
                 points, target = points.float().cuda(), target.long().cuda()
                 points = points.transpose(2, 1)
 
-                seg_pred, trans_feat = classifier(points)
+                seg_pred,_, trans_feat = classifier(points)
                 pred_val = seg_pred.contiguous().cpu().data.numpy()
                 seg_pred = seg_pred.contiguous().view(-1, NUM_CLASSES)
 
