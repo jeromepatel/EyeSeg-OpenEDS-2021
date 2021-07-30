@@ -13,3 +13,5 @@ Point-Transformers-method/data/
 Point-Transformers-method/log/
 Point-Transformers-method/train_cls.py
 Point-Transformers-method/train.partseg.py
+*.json
+*.txt

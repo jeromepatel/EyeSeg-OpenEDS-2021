@@ -100,6 +100,7 @@ class EyeSegDataset(Dataset):
         
         if self.split != 'train' and self.use_val:
             return point_set,fn, image, seg
+        # if self.use_val:
         else:
             return point_set,seg
 

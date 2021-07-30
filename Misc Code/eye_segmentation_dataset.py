@@ -96,7 +96,7 @@ class eyeSegmentation(Dataset):
 # # for sweep in seq_path.iterdir():
 # #     print(seq_str, sweep.stem)
 
-eyeSeg = eyeSegmentation("C:/Users/jyotm/Documents/OpenEDS 2021 3d point cloud segmentation/Point-Transformers-method/data","train")
+eyeSeg = eyeSegmentation("D:/OpenEDS 2021","val")
 DataLoader = torch.utils.data.DataLoader(eyeSeg, batch_size=1, shuffle=True)
 # for point,label in DataLoader:
 #     print(point.shape)

@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 import torch.nn.functional as F
 # from models.pointnet2_utils import PointNetSetAbstraction,PointNetFeaturePropagation
 from models.pointnet_util_modified import PointNetSetAbstraction, PointNetFeaturePropagation
@@ -43,10 +44,28 @@ class get_model(nn.Module):
 class get_loss(nn.Module):
     def __init__(self):
         super(get_loss, self).__init__()
-    def forward(self, pred, target, trans_feat, weight):
-        total_loss = F.nll_loss(pred, target, weight=weight)
+    # def forward(self, pred, target, trans_feat, weight):
+    #     total_loss = F.nll_loss(pred, target, weight=weight)
 
-        return total_loss
+    #     return total_loss
+    def forward(self, pred, gold, trans_feat, weight, smoothing=True):
+        ''' Calculate cross entropy loss, apply label smoothing if needed. '''
+    
+        gold = gold.contiguous().view(-1)
+    
+        if smoothing:
+            eps = 0.2
+            n_class = pred.size(1)
+    
+            one_hot = torch.zeros_like(pred).scatter(1, gold.view(-1, 1), 1)
+            one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
+            log_prb = F.log_softmax(pred, dim=1)
+    
+            loss = -(one_hot * log_prb).sum(dim=1).mean()
+        else:
+            loss = F.cross_entropy(pred, gold, reduction='mean')
+    
+        return loss
 
 if __name__ == '__main__':
     import  torch
