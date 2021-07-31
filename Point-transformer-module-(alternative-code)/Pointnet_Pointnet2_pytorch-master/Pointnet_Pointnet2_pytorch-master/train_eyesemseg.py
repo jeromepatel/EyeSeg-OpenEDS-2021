@@ -19,6 +19,10 @@ from tqdm import tqdm
 import provider
 import numpy as np
 import time
+seed = 0
+torch.manual_seed(seed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(seed)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
@@ -106,7 +110,7 @@ def main(args):
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=4)
     
     print("data loaded successfully")
-    weights_list = [3.0, 2.5, 2.5, 2.0, 1.0]
+    weights_list = [4.0, 2.6, 2.7, 2.5, 1.0]
     weights = torch.FloatTensor(weights_list).cuda()
 
     log_string("The number of training data is: %d" % len(TRAIN_DATASET))

@@ -48,7 +48,7 @@ class get_loss(nn.Module):
     #     total_loss = F.nll_loss(pred, target, weight=weight)
 
     #     return total_loss
-    def forward(self, pred, gold, trans_feat, weight, smoothing=True):
+    def forward(self, pred, gold, trans_feat, weight, smoothing=False):
         ''' Calculate cross entropy loss, apply label smoothing if needed. '''
     
         gold = gold.contiguous().view(-1)
@@ -63,7 +63,7 @@ class get_loss(nn.Module):
     
             loss = -(one_hot * log_prb).sum(dim=1).mean()
         else:
-            loss = F.cross_entropy(pred, gold, reduction='mean')
+            loss = F.cross_entropy(pred, gold, weight=weight, reduction='mean')
     
         return loss
 

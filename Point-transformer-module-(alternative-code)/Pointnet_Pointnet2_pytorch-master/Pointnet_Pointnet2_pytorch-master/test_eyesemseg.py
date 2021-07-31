@@ -32,6 +32,11 @@ for i, cat in enumerate(seg_classes.keys()):
     seg_label_to_cat[i] = cat
 
 
+seed = 0
+torch.manual_seed(seed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(seed)
+
 def parse_args():
     '''PARAMETERS'''
     parser = argparse.ArgumentParser('Model')
