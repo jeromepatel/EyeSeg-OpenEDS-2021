@@ -10,7 +10,7 @@ The competition website is:<br/>
 [EvalAI,submission & leaderboard website](https://eval.ai/web/challenges/challenge-page/896/overview)
 </br>
 
-This repository contains all of my experiments as part of my participation in the OpenEDS 2021 challenge track 1 (this was my task during the 2 month long internship at American University of Sharjah). Our final position is 3rd on [leaderboard](https://eval.ai/web/challenges/challenge-page/896/leaderboard/2362), (NainaNet lol). Aplogies for the mess as the Point transformer code is barely runnable on windows 10 (partly due to heavy RAM and GPU requirements, beware of config file, especially `npoints` in Point Cloud, `k` in KNN and `batch_size` during training).  <br/>
+This repository contains all of my experiments as part of my participation in the OpenEDS 2021 challenge track 1 (this was my task during the 2 month long internship at American University of Sharjah). Our final position is 3rd on [leaderboard](https://eval.ai/web/challenges/challenge-page/896/leaderboard/2362), (NainaNet lol). Apologies for the mess as the Point transformer code is barely runnable on windows 10 (partly due to heavy RAM and GPU requirements, beware of config file, especially `npoints` in Point Cloud, `k` in KNN and `batch_size` during training).  <br/>
 
 The second part is PointNet based architecture which smoothly runs on >= 6 GB GPU RAM with great results. Most of these architecture use CNN or modified versions of Convolution Operations with some nice grouping and sampling tricks. We got good results with PointNet2 (or ++) MSG and DGCNN models. These are easy to train too. 
 Currently, this repo exclusively stores all of the code, however I am planning to release neat and clean code which can be run with minimal configuration and setup. Still if you want to run (for your own experiments, please place modify first `dataset.py` file for point transformer, place data in `data/` directory and modify `config` appropriatly, don't forget to change the suitable model architecture for Pointcloud.  <br/>
@@ -24,7 +24,7 @@ Code Environment:
 * (Also the dataset which is not public anymore)
 
 Majority of my code related to PT is modified from a really [great repo on Point-transformer by Yang You](https://github.com/qq456cvb/Point-Transformers)
-Other PointNet based code is borrowed from [here, Pointnet2 Pytorch](https://github.com/yanx27/Pointnet_Pointnet2_pytorch) (coz it's simply awesome and very intuitive for my task). I would like to thank them for opensourcing their implementations as it provided a great headstart for my approac (baseline as well as experiments). 
+Other PointNet based code is borrowed from [here, Pointnet2 Pytorch](https://github.com/yanx27/Pointnet_Pointnet2_pytorch) (coz it's simply awesome and very intuitive for my task). I would like to thank them for opensourcing their implementations as it provided a great headstart for my approach (baseline as well as experiments). 
 <br/>
 I'll try to clean-up the code and post a new repo with less ugly code, stay tuned and have a great day!
 
