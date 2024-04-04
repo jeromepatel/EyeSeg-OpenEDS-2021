@@ -28,4 +28,4 @@ Other PointNet based code is borrowed from [here, Pointnet2 Pytorch](https://git
 <br/>
 I'll try to clean-up the code and post a new repo with less ugly code, stay tuned and have a great day!
 
-If you have any questions, send an email at makadiyajyot2121@gmail.com
+If you have any questions, send an email at 18bce088@nirmauni.ac.in
